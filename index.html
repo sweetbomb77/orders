@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Forthwall Orders + Multi Controller</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #ff6600d3;
+      margin: 0;
+      padding-bottom: 100px; /* space for fixed controller */
+    }
+
+    h1 {
+      color: #ffbb00;
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    th, td {
+      padding: 10px;
+      text-align: left;
+      border: 1px solid #ff0000;
+    }
+
+    th {
+      background-color: #4ccfbe;
+      color: rgb(255, 123, 0);
+    }
+
+    td {
+      background-color: rgb(255, 1, 213);
+    }
+
+    .order-header {
+      background-color: #333;
+      color: rgb(255, 0, 191);
+      padding: 10px;
+      text-align: center;
+      font-size: 24px;
+    }
+
+    .controller-box {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: #222;
+      padding: 15px 0;
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      box-shadow: 0 -4px 8px rgba(0,0,0,0.3);
+      z-index: 999;
+    }
+
+    .controller {
+      text-align: center;
+      color: white;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 34px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 34px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 26px;
+      width: 26px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: #2196F3;
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="order-header">
+    <h1>Forthwall Orders</h1>
+  </div>
+
+  <div class="order-list">
+    <table id="ordersTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Items</th>
+          <th>Buzzer</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="controller-box">
+    <div class="controller">
+      <label class="switch">
+        <input type="checkbox" id="switch1">
+        <span class="slider"></span>
+      </label>
+      <div>1</div>
+    </div>
+    <div class="controller">
+      <label class="switch">
+        <input type="checkbox" id="switch2">
+        <span class="slider"></span>
+      </label>
+      <div>2</div>
+    </div>
+    <div class="controller">
+      <label class="switch">
+        <input type="checkbox" id="switch3">
+        <span class="slider"></span>
+      </label>
+      <div>3</div>
+    </div>
+  </div>
+
+  <script>
+    const table = document.getElementById('ordersTable').getElementsByTagName('tbody')[0];
+    
+	const socket = new WebSocket('https://forthwall-webhook.onrender.com/');
+
+    socket.onopen = () => {
+      console.log('WebSocket connected');
+    };
+
+    socket.onmessage = (event) => {
+      const order = JSON.parse(event.data);
+      addOrderToTable(order);
+    };
+
+    socket.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    socket.onclose = () => {
+      console.log('WebSocket closed');
+    };
+
+    const promoCodeMap = {
+      "prm_oTyKd8o9TKyWImlL975z-A": "buzzer_1",
+      "prm_vhfaVBVmTWyOwQlE3GbD2A": "buzzer_2",
+	  "prm_fAi1misYRmqVThsQ7ZdaEQ": "buzzer_3"
+    };
+
+    function addOrderToTable(orderData) {
+      const username = orderData.data.username || "Unknown";
+      const offers = orderData.data.offers || [];
+      const message = orderData.data.message || "No message";
+      const promoId = orderData.data.promotionId;
+      const buzzer = promoCodeMap[promoId] || "—";
+
+      for (let i = 0; i < offers.length; i++) {
+        const row = table.insertRow();
+        row.insertCell().textContent = username;
+        row.insertCell().textContent = offers[i].name || "Unknown";
+        row.insertCell().textContent = buzzer;
+        row.insertCell().textContent = message;
+      }
+    }
+
+    // Controller toggles
+    const switches = [
+      { id: "switch1", controller: "controller-one" },
+      { id: "switch2", controller: "controller-two" },
+      { id: "switch3", controller: "controller-three" }
+    ];
+
+    switches.forEach(({ id, controller }) => {
+      const checkbox = document.getElementById(id);
+      const key = `state-${controller}`;
+
+      const saved = localStorage.getItem(key);
+      if (saved !== null) {
+        checkbox.checked = saved === "true";
+      }
+
+      checkbox.addEventListener("change", () => {
+        const message = {
+          type: "toggle",
+          state: {
+            id: controller,
+            value: checkbox.checked
+          }
+        };
+        socket.send(JSON.stringify(message));
+        localStorage.setItem(key, checkbox.checked);
+      });
+    });
+  </script>
+</body>
+</html>
